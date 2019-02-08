@@ -66,6 +66,7 @@ namespace GRA.Data.Profile
                 .ReverseMap();
             CreateMap<Model.GroupInfo, Domain.Model.GroupInfo>().ReverseMap();
             CreateMap<Model.GroupType, Domain.Model.GroupType>().ReverseMap();
+            CreateMap<Model.Language, Domain.Model.Language>().ReverseMap();
             CreateMap<Model.Location, Domain.Model.Location>().ReverseMap();
             CreateMap<Model.Mail, Domain.Model.Mail>().ReverseMap();
             CreateMap<Model.NewsCategory, Domain.Model.NewsCategory>()
@@ -116,7 +117,7 @@ namespace GRA.Data.Profile
             CreateMap<Model.Site, Domain.Model.Site>().ReverseMap();
             CreateMap<Model.SiteSetting, Domain.Model.SiteSetting>().ReverseMap();
             CreateMap<Model.System, Domain.Model.System>()
-                .ForMember(_ => _.Branches, 
+                .ForMember(_ => _.Branches,
                     opt => opt.MapFrom(src => src.Branches.OrderBy(_ => _.Name)))
                 .ReverseMap();
             CreateMap<Model.Trigger, Domain.Model.Trigger>()
