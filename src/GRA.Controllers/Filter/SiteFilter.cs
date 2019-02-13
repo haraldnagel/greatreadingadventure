@@ -215,56 +215,60 @@ namespace GRA.Controllers.Filter
                 httpContext.Items[ItemKey.ExternalEventListUrl] = site.ExternalEventListUrl;
             }
 
+            var currentCulture = _userContextProvider.GetCurrentCulture();
+
+            httpContext.Items[ItemKey.HtmlLang] = currentCulture.TwoLetterISOLanguageName;
+
             if (_l10nOptions.Value?.SupportedCultures.Count > 1)
             {
-                var uriBuilder = new UriBuilder(httpContext.Request.GetEncodedUrl());
-                var qs = HttpUtility.ParseQueryString(uriBuilder.Query);
-                var queryStringKey = new QueryStringRequestCultureProvider().QueryStringKey;
-                string qsCulture = qs[queryStringKey];
-                if (!string.IsNullOrEmpty(qsCulture))
-                {
-                    // set in querystring
-                    var matchingCulture = _l10nOptions
-                        .Value
-                        .SupportedCultures
-                        .FirstOrDefault(_ => _.Name == qsCulture);
+                //var uriBuilder = new UriBuilder(httpContext.Request.GetEncodedUrl());
+                //var qs = HttpUtility.ParseQueryString(uriBuilder.Query);
+                //var queryStringKey = new QueryStringRequestCultureProvider().QueryStringKey;
+                //string qsCulture = qs[queryStringKey];
+                //if (!string.IsNullOrEmpty(qsCulture))
+                //{
+                //    // set in querystring
+                //    var matchingCulture = _l10nOptions
+                //        .Value
+                //        .SupportedCultures
+                //        .FirstOrDefault(_ => _.Name == qsCulture);
 
-                    if (matchingCulture != null && matchingCulture.Name != Culture.DefaultName)
-                    {
-                        // valid culture
-                        var cookieCulture = httpContext
-                            .Request
-                            .Cookies[CookieRequestCultureProvider.DefaultCookieName];
+                //    if (matchingCulture != null && matchingCulture.Name != Culture.DefaultName)
+                //    {
+                //        // valid culture
+                //        var cookieCulture = httpContext
+                //            .Request
+                //            .Cookies[CookieRequestCultureProvider.DefaultCookieName];
 
-                        if (string.IsNullOrEmpty(cookieCulture)
-                            || cookieCulture != matchingCulture.Name)
-                        {
-                            // no cookie or new culture selected, reset cookie
-                            httpContext.Response.Cookies.Append(
-                                CookieRequestCultureProvider.DefaultCookieName,
-                                CookieRequestCultureProvider
-                                    .MakeCookieValue(new RequestCulture(matchingCulture.Name)),
-                                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddDays(14) }
-                            );
-                            if (_userContextProvider.GetContext().ActiveUserId != null)
-                            {
-                                await _userService.UpdateCulture(matchingCulture.Name);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // invalid culture or default culture, remove cookie
-                        httpContext
-                            .Response
-                            .Cookies
-                            .Delete(CookieRequestCultureProvider.DefaultCookieName);
-                        if (_userContextProvider.GetContext().ActiveUserId != null)
-                        {
-                            await _userService.UpdateCulture(null);
-                        }
-                    }
-                }
+                //        if (string.IsNullOrEmpty(cookieCulture)
+                //            || cookieCulture != matchingCulture.Name)
+                //        {
+                //            // no cookie or new culture selected, reset cookie
+                //            httpContext.Response.Cookies.Append(
+                //                CookieRequestCultureProvider.DefaultCookieName,
+                //                CookieRequestCultureProvider
+                //                    .MakeCookieValue(new RequestCulture(matchingCulture.Name)),
+                //                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddDays(14) }
+                //            );
+                //            if (_userContextProvider.GetContext().ActiveUserId != null)
+                //            {
+                //                await _userService.UpdateCulture(matchingCulture.Name);
+                //            }
+                //        }
+                //    }
+                //    else
+                //    {
+                //        // invalid culture or default culture, remove cookie
+                //        httpContext
+                //            .Response
+                //            .Cookies
+                //            .Delete(CookieRequestCultureProvider.DefaultCookieName);
+                //        if (_userContextProvider.GetContext().ActiveUserId != null)
+                //        {
+                //            await _userService.UpdateCulture(null);
+                //        }
+                //    }
+                //}
 
                 var cultureList = new List<SelectListItem>();
                 foreach (var culture in _l10nOptions.Value.SupportedCultures)
@@ -272,10 +276,11 @@ namespace GRA.Controllers.Filter
                     var text = culture.Parent != null
                         ? culture.Parent.NativeName
                         : culture.NativeName;
-                    qs = HttpUtility.ParseQueryString(uriBuilder.Query);
-                    qs[queryStringKey] = culture.Name;
-                    uriBuilder.Query = qs.ToString();
-                    cultureList.Add(new SelectListItem(text, uriBuilder.ToString()));
+                    //qs = HttpUtility.ParseQueryString(uriBuilder.Query);
+                    //qs[queryStringKey] = culture.Name;
+                    //uriBuilder.Query = qs.ToString();
+                    //cultureList.Add(new SelectListItem(text, uriBuilder.ToString()));
+                    cultureList.Add(new SelectListItem(text, culture.Name));
                 }
                 httpContext.Items[ItemKey.L10n] = cultureList.OrderBy(_ => _.Text);
             }

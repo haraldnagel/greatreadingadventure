@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace GRA.Controllers
 {
-    public class InfoController : Base.UserController
+    public class InfoController : Base.Controller
     {
         private readonly ILogger<InfoController> _logger;
         private readonly PageService _pageService;
@@ -22,6 +22,10 @@ namespace GRA.Controllers
             _pageService = Require.IsNotNull(pageService, nameof(pageService));
         }
 
+        [Route("/{culture:validCulture}/{sitePath:validSitePath}/[controller]/{stub}")]
+        [Route("/{culture:validCulture}/[controller]/{stub}")]
+        [Route("/{sitePath:validSitePath}/[controller]/{stub}")]
+        [Route("/[controller]/{stub}")]
         public async Task<IActionResult> Index(string stub)
         {
             try

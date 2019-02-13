@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using AutoMapper;
@@ -15,8 +14,12 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
+using Microsoft.AspNetCore.Localization.Routing;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -78,6 +81,24 @@ namespace GRA.Web
             }
 
             _isDevelopment = env.IsDevelopment();
+
+            _rdrcp = new RouteDataRequestCultureProvider();
+        }
+
+        private readonly RouteDataRequestCultureProvider _rdrcp;
+        private void ConfigureRequestLocalizationOptions(RequestLocalizationOptions rlo)
+        {
+            rlo.DefaultRequestCulture = new RequestCulture(Culture.DefaultCulture);
+            rlo.SupportedCultures = Culture.SupportedCultures;
+            rlo.SupportedUICultures = Culture.SupportedCultures;
+            rlo.RequestCultureProviders.Insert(0, _rdrcp);
+            var qsProvider = rlo
+                .RequestCultureProviders
+                .SingleOrDefault(_ => _.GetType() == typeof(QueryStringRequestCultureProvider));
+            if (qsProvider != null)
+            {
+                rlo.RequestCultureProviders.Remove(qsProvider);
+            }
         }
 
         // This method gets called by the runtime. Use this method to add services to the container.
@@ -85,12 +106,12 @@ namespace GRA.Web
         {
             services.AddLocalization();
 
-            services.Configure<RequestLocalizationOptions>(_ =>
-            {
-                _.DefaultRequestCulture = new RequestCulture(Culture.DefaultCulture);
-                _.SupportedCultures = Culture.SupportedCultures;
-                _.SupportedUICultures = Culture.SupportedCultures;
-            });
+            services.Configure<RequestLocalizationOptions>(ConfigureRequestLocalizationOptions);
+
+            var rlo = new RequestLocalizationOptions();
+            ConfigureRequestLocalizationOptions(rlo);
+
+            services.AddSingleton(rlo);
 
             // Add framework services.
             services.AddSession(_ => _.IdleTimeout = TimeSpan.FromMinutes(30));
@@ -156,8 +177,19 @@ namespace GRA.Web
                     break;
             }
 
+            // configure route constraints
+            services.Configure<RouteOptions>(_ =>
+            {
+                _.ConstraintMap.Add("validCulture", typeof(CultureRouteConstraint));
+                _.ConstraintMap.Add("validSitePath", typeof(SiteRouteConstraint));
+            });
+
             // add MVC
-            services.AddMvc()
+            services.AddMvc(_ =>
+            {
+                _.Filters.Add(new MiddlewareFilterAttribute(typeof(LocalizationPipeline)));
+                _.Conventions.Insert(0, new IndexRouteConvention(_logger));
+            })
                 .SetCompatibilityVersion(Microsoft.AspNetCore.Mvc.CompatibilityVersion.Version_2_2)
                 .AddViewLocalization(LanguageViewLocationExpanderFormat.Suffix)
                 .AddDataAnnotationsLocalization();
@@ -271,6 +303,9 @@ namespace GRA.Web
 
             // store the data protection key in the database
             services.AddDataProtection().PersistKeysToDbContext<Data.Context>();
+
+            services.AddScoped<SiteRouteConstraint>();
+            services.AddScoped<CultureRouteConstraint>();
 
             // utilities
             services.AddScoped<ICodeGenerator, CodeGenerator>();
@@ -441,8 +476,7 @@ namespace GRA.Web
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app,
-            IPathResolver pathResolver,
-            Controllers.Base.ISitePathValidator sitePathValidator)
+            IPathResolver pathResolver)
         {
             if (_isDevelopment)
             {
@@ -452,13 +486,6 @@ namespace GRA.Web
             {
                 app.UseStatusCodePagesWithReExecute("/Error/Index/{0}");
             }
-
-            app.UseRequestLocalization(new RequestLocalizationOptions
-            {
-                DefaultRequestCulture = new RequestCulture(Culture.DefaultCulture),
-                SupportedCultures = Culture.SupportedCultures,
-                SupportedUICultures = Culture.SupportedCultures
-            });
 
             if (!string.IsNullOrEmpty(_config[ConfigurationKey.ReverseProxyAddress]))
             {
@@ -484,6 +511,13 @@ namespace GRA.Web
             });
 
             app.UseResponseCompression();
+
+            app.UseRequestLocalization(new RequestLocalizationOptions
+            {
+                DefaultRequestCulture = new RequestCulture(Culture.DefaultCulture),
+                SupportedCultures = Culture.SupportedCultures,
+                SupportedUICultures = Culture.SupportedCultures
+            });
 
             // configure static files with 7 day cache
             app.UseStaticFiles(new StaticFileOptions
@@ -543,38 +577,128 @@ namespace GRA.Web
 
             app.UseAuthentication();
 
+            var rlo = new RequestLocalizationOptions();
+            ConfigureRequestLocalizationOptions(rlo);
+
             // sitePath is also referenced in GRA.Controllers.Filter.SiteFilter
-            app.UseMvc(routes =>
-            {
-                routes.MapRoute(
-                    name: null,
-                    template: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
 
-                routes.MapRoute(
-                    name: null,
-                    template: "{sitePath}/Info/{stub}",
-                    defaults: new { controller = "Info", action = "Index" },
-                    constraints: new
-                    {
-                        sitePath = new SiteRouteConstraint(sitePathValidator)
-                    });
-                routes.MapRoute(
-                    name: null,
-                    template: "Info/{stub}",
-                    defaults: new { controller = "Info", action = "Index" });
+            //app.UseRequestLocalization(rlo);
 
-                routes.MapRoute(
-                    name: null,
-                    template: "{sitePath}/{controller}/{action}/{id?}",
-                    defaults: new { controller = "Home", action = "Index" },
-                    constraints: new
-                    {
-                        sitePath = new SiteRouteConstraint(sitePathValidator)
-                    });
-                routes.MapRoute(
-                    name: null,
-                    template: "{controller=Home}/{action=Index}/{id?}");
-            });
+            app.UseMvc();
+
+            //app.UseMvc(routes =>
+            //{
+            //    routes.MapRoute(
+            //        name: null,
+            //        template: "{culture}/{area:exists}/{controller}/{action}/{id?}",
+            //        defaults: new { controller = "Home", action = "Index" },
+            //        constraints: new
+            //        {
+            //            culture = new CultureRouteConstraint(l10nOptions)
+            //        });
+
+            //    routes.MapRoute(
+            //        name: null,
+            //        template: "{culture}/{sitePath}/Info/{stub}",
+            //        defaults: new { controller = "Info", action = "Index" },
+            //        constraints: new
+            //        {
+            //            sitePath = new SiteRouteConstraint(sitePathValidator),
+            //            culture = new CultureRouteConstraint(l10nOptions)
+            //        });
+
+            //    routes.MapRoute(
+            //        name: null,
+            //        template: "{culture}/Info/{stub}",
+            //        defaults: new { controller = "Info", action = "Index" },
+            //        constraints: new
+            //        {
+            //            culture = new CultureRouteConstraint(l10nOptions)
+            //        });
+
+            //    routes.MapRoute(
+            //        name: null,
+            //        template: "{culture}/{sitePath}/{controller}/{action}/{id?}",
+            //        defaults: new { controller = "Home", action = "Index" },
+            //        constraints: new
+            //        {
+            //            sitePath = new SiteRouteConstraint(sitePathValidator),
+            //            culture = new CultureRouteConstraint(l10nOptions)
+            //        });
+
+            //    routes.MapRoute(
+            //        name: null,
+            //        template: "{culture}/{controller}/{action}/{id?}",
+            //        defaults: new { controller = "Home", action = "Index" },
+            //        constraints: new
+            //        {
+            //            culture = new CultureRouteConstraint(l10nOptions)
+            //        });
+            //    //routes.MapRoute(
+            //    //    name: null,
+            //    //    template: "{controller}/{action}/{id?}",
+            //    //    defaults: new { controller = "Home", action = "Index" }
+            //    //    );
+            //});
+
+            //app.UseRouter(router =>
+            //{
+            //    router.MapMiddlewareRoute("{culture}/{*mvcRoute}", subApp =>
+            //    {
+            //        subApp.UseRequestLocalization(rlo);
+
+            //        subApp.UseMvc(routes =>
+            //        {
+            //            routes.MapRoute(
+            //                name: null,
+            //                template: "{culture}/{area:exists}/{controller}/{action}/{id?}",
+            //                defaults: new { controller = "Home", action = "Index", culture = Culture.DefaultName },
+            //                constraints: new
+            //                {
+            //                    culture = new CultureRouteConstraint(l10nOptions)
+            //                });
+
+            //            routes.MapRoute(
+            //                name: null,
+            //                template: "{culture}/{sitePath}/Info/{stub}",
+            //                defaults: new { controller = "Info", action = "Index", culture = Culture.DefaultName },
+            //                constraints: new
+            //                {
+            //                    sitePath = new SiteRouteConstraint(sitePathValidator),
+            //                    culture = new CultureRouteConstraint(l10nOptions)
+            //                });
+
+            //            routes.MapRoute(
+            //                name: null,
+            //                template: "{culture}/Info/{stub}",
+            //                defaults: new { controller = "Info", action = "Index", culture = Culture.DefaultName },
+            //                constraints: new
+            //                {
+            //                    culture = new CultureRouteConstraint(l10nOptions)
+            //                });
+
+            //            routes.MapRoute(
+            //                name: null,
+            //                template: "{culture}/{sitePath}/{controller}/{action}/{id?}",
+            //                defaults: new { controller = "Home", action = "Index", culture = Culture.DefaultName },
+            //                constraints: new
+            //                {
+            //                    sitePath = new SiteRouteConstraint(sitePathValidator),
+            //                    culture = new CultureRouteConstraint(l10nOptions)
+            //                });
+
+            //            routes.MapRoute(
+            //                name: null,
+            //                template: "{culture}/{controller}/{action}/{id?}",
+            //                defaults: new { controller = "Home", action = "Index", culture = Culture.DefaultName },
+            //                constraints: new
+            //                {
+            //                    culture = new CultureRouteConstraint(l10nOptions)
+            //                });
+            //        });
+            //    });
+
+            //});
 
             app.UseWebSockets(new WebSocketOptions
             {
@@ -593,6 +717,103 @@ namespace GRA.Web
                     await next();
                 }
             });
+        }
+    }
+
+    public class LocalizationPipeline
+    {
+        public void Configure(IApplicationBuilder app, RequestLocalizationOptions options)
+        {
+            app.UseRequestLocalization(options);
+        }
+    }
+
+    public class IndexRouteConvention : IApplicationModelConvention
+    {
+        private readonly ILogger _logger;
+        public IndexRouteConvention(ILogger logger)
+        {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public void Apply(ApplicationModel application)
+        {
+            var indexRoute = new AttributeRouteModel(new RouteAttribute("[action]") { Order = -1 });
+            var indexPostRoute = new AttributeRouteModel(new HttpPostAttribute("[action]") { Order = -1 });
+            var actionRoute = new AttributeRouteModel(new RouteAttribute("[action]"));
+            var actionPostRoute = new AttributeRouteModel(new HttpPostAttribute("[action]"));
+
+            foreach (var controller in application.Controllers)
+            {
+                string areaName = null;
+                var areaAttribute = controller
+                    .Attributes
+                    .FirstOrDefault(_ => _.GetType() == typeof(AreaAttribute));
+                if (areaAttribute != null)
+                {
+                    areaName = ((AreaAttribute)areaAttribute).RouteValue;
+                }
+
+                foreach (var action in controller.Actions)
+                {
+                    var hasCurrentRouteModel = action
+                        .Selectors
+                        .FirstOrDefault()?
+                        .AttributeRouteModel != null;
+                    if (!hasCurrentRouteModel)
+                    {
+                        var isIndex = action.ActionName == "Index";
+                        var isHttpPost = action
+                            .ActionMethod
+                            .CustomAttributes
+                            .Any(_ => _.AttributeType == typeof(HttpPostAttribute));
+
+                        var isGetIndex = isIndex && !isHttpPost;
+
+                        action.Selectors.Add(new SelectorModel
+                        {
+                            AttributeRouteModel = isGetIndex
+                                ? isHttpPost ? indexPostRoute : indexRoute
+                                : isHttpPost ? actionPostRoute : actionRoute
+                        });
+
+                        var arm = action
+                            .Selectors?
+                            .Where(_ => _.AttributeRouteModel != null)?
+                            .Select(_ => _.AttributeRouteModel);
+
+                        string templates = arm?.Any() == true
+                            ? string.Join(',', arm.Select(_ => _.Template))
+                            : null;
+
+                        _logger.LogDebug("{isIndex} {set} {areaName} / {ControllerName} / {ActionName} selector(s) {templates}",
+                            isIndex ? "INDEX" : "NONINDEX",
+                            !hasCurrentRouteModel ? "set" : "not set",
+                            areaName,
+                            controller.ControllerName,
+                            action.ActionName,
+                            templates);
+                    }
+                    else
+                    {
+                        var arm = action
+                            .Selectors?
+                            .Where(_ => _.AttributeRouteModel != null)?
+                            .Select(_ => _.AttributeRouteModel);
+
+                        string templates = arm?.Any() == true
+                            ? string.Join(',', arm.Select(_ => _.Template))
+                            : null;
+
+                        _logger.LogDebug("{areaName} / {ControllerName} / {ActionName} already has selector(s) {templates}",
+                            areaName,
+                            controller.ControllerName,
+                            action.ActionName,
+                            templates);
+                    }
+
+                }
+            }
         }
     }
 }

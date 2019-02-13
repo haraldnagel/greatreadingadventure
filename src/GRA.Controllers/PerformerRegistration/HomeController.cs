@@ -17,7 +17,8 @@ namespace GRA.Controllers.PerformerRegistration
 {
     [Area("PerformerRegistration")]
     [Authorize(Policy = Policy.AccessPerformerRegistration)]
-    public class HomeController : Base.Controller
+    [Route("[area]/[controller]/[action]")]
+    public class HomeController : Base.BaseController
     {
         private const int MaxUploadMB = 25;
         private const int MBSize = 1024 * 1024;

@@ -4,7 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace GRA.Controllers.Base
 {
     [ServiceFilter(typeof(MissionControlFilter), Order = 2)]
-    public abstract class MCController : Controller
+    [Route("[area]/[controller]/[action]")]
+    public abstract class MCController : BaseController
     {
         protected static readonly string[] ValidUploadExtensions
             = { ".jpeg", ".jpg", ".pdf", ".png" };

@@ -68,6 +68,7 @@ namespace GRA.Controllers
             _userService = userService ?? throw new ArgumentNullException(nameof(userService));
         }
 
+        [Route("/")]
         public async Task<IActionResult> Index()
         {
             var site = await GetCurrentSiteAsync();

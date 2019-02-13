@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -41,7 +42,14 @@ namespace GRA.Controllers.Filter
                     controller.TempData[TempDataKey.AlertWarning] = ExpiredMessage;
                 }
 
-                await controller.LogoutUserAsync();
+                int? siteId = context.HttpContext.Session.GetInt32(SessionKey.SiteId);
+                context.HttpContext.Session.Clear();
+                await context.HttpContext.SignOutAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+                context.HttpContext.User = null;
+                if (siteId != null)
+                {
+                    context.HttpContext.Session.SetInt32(SessionKey.SiteId, (int)siteId);
+                }
 
                 context.Result = controller.RedirectToRoute(new
                 {
