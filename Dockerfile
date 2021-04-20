@@ -17,7 +17,10 @@ RUN export PATH="$PATH:/root/.dotnet/tools" && \
     dotnet ef migrations add ${IMAGE_VERSION} --project src/GRA.Data.SQLite/GRA.Data.SQLite.csproj
 
 # Build project and run tests
-RUN dotnet test
+RUN dotnet build
+
+# Build project and run tests
+RUN dotnet test --no-build
 
 # Publish release project
 RUN dotnet publish -c Release -o "/app/publish/"

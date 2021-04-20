@@ -23,6 +23,12 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
+          name: GRA Build Log
+          path: msbuild.log
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v2
+        with:
           name: Great Reading Adventure
           path: package/GreatReadingAdventure-*.zip
           if-no-files-found: ignore

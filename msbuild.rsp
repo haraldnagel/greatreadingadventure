@@ -1,0 +1,5 @@
+# Reduce logging during non-VS msbuild events
+/consoleLoggerParameters:ErrorsOnly;Verbosity=quiet
+/filelogger
+/fileLoggerParameters:Encoding=UTF-8;PerformanceSummary;WarningsOnly;Summary
+/maxCpuCount
